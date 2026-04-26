@@ -1,59 +1,114 @@
-#include "LauncherApp.h"
+#include "MainWindow.h"
+
+#include <ridgeline/Module.h>
 #include <common/version/version.h>
-#include <common/error/error-utils.h>
+#include <crash_handler_stub.h>
 #include <xlog/xlog.h>
 #include <xlog/FileAppender.h>
 #include <xlog/Win32Appender.h>
-#include <xlog/ConsoleAppender.h>
-#include <crash_handler_stub.h>
-#include <format>
+#include <windows.h>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <string>
 
-void InitLogging()
+namespace {
+
+// Returns "<launcher dir>\logs" and ensures the directory exists. Both the
+// launcher log and any crash report end up here.
+std::string ensure_logs_dir()
 {
-    auto app_data_dir = Win32xx::GetAppDataPath();
-    auto af_data_dir = app_data_dir + "\\Alpine Faction";
-    CreateDirectoryA(af_data_dir, nullptr);
-    auto log_file_path = af_data_dir + "\\AlpineFactionLauncher.log";
-    xlog::LoggerConfig::get()
-        .add_appender<xlog::FileAppender>(log_file_path.GetString(), false)
-        .add_appender<xlog::ConsoleAppender>()
-        .add_appender<xlog::Win32Appender>();
-    xlog::info("Alpine Faction Launcher {} ({}), {} {}", VERSION_STR, VERSION_CODE, __DATE__, __TIME__);
+    char exe_path[MAX_PATH];
+    GetModuleFileNameA(nullptr, exe_path, MAX_PATH);
+    std::string dir = exe_path;
+    auto sep = dir.find_last_of("\\/");
+    if (sep != std::string::npos) dir.resize(sep);
+    std::string logs_dir = dir + "\\logs";
+    CreateDirectoryA(logs_dir.c_str(), nullptr);
+    return logs_dir;
 }
 
-void InitCrashHandler()
+// Set up xlog so every session writes a fresh Ridgeline.log into <launcher
+// dir>\logs (and mirrors to OutputDebugString for IDE attach). Truncated on
+// each launch so the file never grows unbounded.
+std::string init_logging()
 {
-    auto app_data_dir = Win32xx::GetAppDataPath();
-    CrashHandlerConfig config;
-    std::snprintf(config.log_file, std::size(config.log_file), "%s\\Alpine Faction\\AlpineFactionLauncher.log", app_data_dir.c_str());
-    std::snprintf(config.output_dir, std::size(config.output_dir), "%s\\Alpine Faction", app_data_dir.c_str());
-    std::snprintf(config.app_name, std::size(config.app_name), "AlpineFactionLauncher");
-    config.add_known_module("AlpineFactionLauncher");
-    CrashHandlerStubInstall(config);
+    std::string log_path = ensure_logs_dir() + "\\Ridgeline.log";
+    xlog::LoggerConfig::get().add_appender(
+        std::make_unique<xlog::FileAppender>(log_path, /*append=*/false, /*flush=*/true));
+    xlog::LoggerConfig::get().add_appender(std::make_unique<xlog::Win32Appender>());
+    return log_path;
 }
 
-int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int) try
+void log_module_inventory()
 {
-    InitLogging();
-    InitCrashHandler();
-
-    // Start Win32++
-    LauncherApp app;
-
-    // Run the application
-    return app.Run(); // NOLINT(clang-analyzer-core.StackAddressEscape)
+    auto modules = ridgeline::ModuleRegistry::instance().all();
+    xlog::info("Module registry: {} module(s)", modules.size());
+    for (auto* m : modules) {
+        xlog::info("  - {} ({}): is_configured={}",
+                   m->display_name(), m->internal_name(), m->is_configured());
+    }
 }
-// catch all unhandled CException types
-catch (const Win32xx::CException &e) {
-    // Display the exception and quit
-    std::string msg = std::format("{}\nerror {}: {}", e.GetText(), e.GetError(), e.GetErrorString());
-    MessageBox(nullptr, msg.c_str(), nullptr, MB_ICONERROR | MB_OK);
 
-    return -1;
+} // namespace
+
+// Ridgeline launcher entry point.
+//
+// Normal start: enumerates ModuleRegistry, launches the main window.
+// `--smoke-test` arg: writes the registered module list to a file beside the
+// exe and exits with no UI. Useful for verifying that a module's
+// /WHOLEARCHIVE static-init registration plumbing actually fires (e.g. when
+// adding a new module, run `Ridgeline.exe --smoke-test` and grep the output
+// file for the new module's display name).
+
+static std::string format_module_list()
+{
+    auto modules = ridgeline::ModuleRegistry::instance().all();
+    std::string body = std::string(PRODUCT_NAME_VERSION) + "\n\n";
+    if (modules.empty()) {
+        body += "No modules are registered.\n\n"
+                "If you expected modules to appear, the linker likely stripped "
+                "their static initializers. Verify that each module's static lib "
+                "is linked with WHOLE_ARCHIVE in launcher/CMakeLists.txt.";
+    } else {
+        body += "Registered modules:\n";
+        for (auto* m : modules) {
+            body += "  - ";
+            body += m->display_name();
+            body += "  (";
+            body += m->internal_name();
+            body += ")\n";
+        }
+    }
+    return body;
 }
-// catch all unhandled std::exception types
-catch (const std::exception& e) {
-    std::string msg = std::format("Fatal error: {}", generate_message_for_exception(e));
-    MessageBox(nullptr, msg.c_str(), nullptr, MB_ICONERROR | MB_OK);
-    return -1;
+
+int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR cmd_line, int)
+{
+    if (cmd_line && std::strstr(cmd_line, "--smoke-test")) {
+        char exe_path[MAX_PATH];
+        GetModuleFileNameA(nullptr, exe_path, MAX_PATH);
+        std::string out_path = exe_path;
+        auto sep = out_path.find_last_of("\\/");
+        if (sep != std::string::npos) out_path.resize(sep + 1);
+        out_path += "smoke-test-output.txt";
+        FILE* f = std::fopen(out_path.c_str(), "w");
+        if (f) {
+            std::fputs(format_module_list().c_str(), f);
+            std::fclose(f);
+        }
+        return 0;
+    }
+
+    std::string log_path = init_logging();
+    install_crash_handler(GetModuleHandleA(nullptr), "Ridgeline", log_path);
+    xlog::info("==== {} starting ====", PRODUCT_NAME_VERSION);
+    xlog::info("Build: {} {}", get_build_date(), get_build_time());
+    xlog::info("Log: {}", log_path);
+    log_module_inventory();
+
+    int rc = ridgeline_launcher::MainWindow::run(instance);
+
+    xlog::info("==== Ridgeline exiting (rc={}) ====", rc);
+    return rc;
 }

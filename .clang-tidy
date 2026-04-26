@@ -25,4 +25,4 @@ Checks: >
   -readability-use-anyofallof,
   -readability-isolate-declaration,
 
-HeaderFilterRegex: '/(common|crash_handler|crash_handler_stub|editor_patch|game_patch|launcher|launcher_common|patch_common|xlog)/'
+HeaderFilterRegex: '/(core/(common|crash_handler|crash_handler_stub|launcher_runtime|patch_runtime|xlog)|launcher|modules/[^/]+)/'

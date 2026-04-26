@@ -1,0 +1,7 @@
+#include <windows.h>
+
+// Embeds launcher.manifest so the launcher gets:
+//   - Common Controls v6 (modern themed widgets)
+//   - Per-monitor DPI awareness
+//   - Declared OS compatibility through Win11
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "launcher.manifest"

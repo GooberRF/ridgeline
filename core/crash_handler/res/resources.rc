@@ -1,0 +1,19 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+// The crash handler shows only a marquee progress dialog while the dump is
+// being generated; the "report ready" notification is a stock MessageBox so
+// it doesn't need a dialog template. Past versions had IDD_MAIN +
+// IDD_ADDITIONAL_INFO + IDB_HDR_PIC for an "upload-this-report" UI; those
+// were removed when Ridgeline dropped the online crash submission flow.
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDD_PROGRESS DIALOG 0, 0, 183, 47
+STYLE DS_3DLOOK | DS_CENTER | DS_MODALFRAME | DS_SHELLFONT | WS_CAPTION | WS_VISIBLE | WS_POPUP
+CAPTION "Operation in progress"
+FONT 8, "Ms Shell Dlg"
+{
+    LTEXT           "Operation is in progress... Please wait.", IDC_TITLE, 8, 8, 126, 9, SS_LEFT, WS_EX_LEFT
+    CONTROL         "", IDC_PROGRESS_BAR, PROGRESS_CLASS, 0, 8, 24, 168, 14, WS_EX_LEFT
+}

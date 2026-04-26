@@ -5,9 +5,9 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 reloc_addr=$1
-file=${2:-build/Debug/bin/AlpineFaction.dll.debug}
+file=${2:-build/Debug/bin/Ridgeline.exe.debug}
 reloc_base=${3:-0}
-#file=build/Debug/bin/AlpineFaction.dll.debug
+#file=build/Debug/bin/Ridgeline.exe.debug
 img_base=$(i686-w64-mingw32-objdump -t "$file" | grep __image_base__ | grep -oE '0x[0-9A-F]{8}')
 echo "Image base: $img_base"
 echo "Image test: $((img_base))"

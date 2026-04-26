@@ -1,61 +1,36 @@
-Building Alpine Faction
-=======================
+Building Ridgeline
+==================
 
-Windows
--------
+Ridgeline is built as 32-bit Windows binaries (the games it patches are 32-bit). Use either MSVC on Windows or MinGW-w64 on Linux.
 
-On Windows use CMake GUI to generate project files for your favorite IDE.
-Supports only Win32 platform. If you are using Visual Studio 2019+ on x86_64 Windows host
-CMake by default selects Win64 target platform. Please change it manually to Win32.
+Windows (MSVC)
+--------------
 
-Linux
------
-
-Building on Ubuntu 24.04 based distribution is recommended.
-Building on other Linux distributions should be possible but may require different/additional steps that are not
-covered by this instruction.
-
-Make sure you have all the needed tools:
-
-* mingw-w64
-* cmake
-* make
-
-To install them run:
+On Windows use CMake GUI or the command line to generate project files for Visual Studio. Win32 (x86) is the only supported target — if your generator defaults to x64, change it to Win32.
 
 ```
-sudo apt-get install mingw-w64 cmake make
+cmake -S . -B build -G "Visual Studio 17 2022" -A Win32
+cmake --build build --config Release
 ```
 
-You can use Ninja instead of Make to speed up build.
+Built binaries land in `build/bin/` (or `build/<config>/bin/` for multi-config generators).
 
-Checkout source code repository:
+Linux (MinGW-w64 cross-compile)
+-------------------------------
 
-```
-git clone https://github.com/GooberRF/alpinefaction.git
-```
+Tested on Ubuntu 24.04. Other distributions should work but may require different package names.
 
-Create `build` directory and generate makefiles (you can use a different directory):
-
-```
-cd alpinefaction
-mkdir build
-cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/mingw-ubuntu.cmake -DCMAKE_BUILD_TYPE=Release
-```
-
-Start build:
+Install the toolchain:
 
 ```
-make -j$(nproc)
+sudo apt-get install g++-mingw-w64-i686-posix cmake ninja-build
 ```
 
-After build is finished you will find binaries in `build/Release/bin` subdirectory.
-
-To update your custom builds run:
+Configure and build:
 
 ```
-cd alpinefaction/build
-git pull
-make -j$(nproc)
+cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-ubuntu.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
 ```
+
+Build outputs land in `build/bin/`.

@@ -1,6 +1,8 @@
-# CMake 3.15 is required for CMAKE_MSVC_RUNTIME_LIBRARY.
-cmake_minimum_required(VERSION 3.15)
-project(AlpineFaction)
+# CMake 3.24 is required for the $<LINK_LIBRARY:WHOLE_ARCHIVE,...> generator
+# expression, which Ridgeline relies on so each game module's static initializer
+# (RIDGELINE_REGISTER_MODULE) survives dead-code stripping by the linker.
+cmake_minimum_required(VERSION 3.24)
+project(Ridgeline)
 
 if(NOT "${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
     message(FATAL_ERROR "Only x86 (32 bit) platform is supported!")
@@ -28,7 +30,6 @@ add_compile_definitions(
     _WIN32_IE=0x0501
     # needed for GetModuleFileNameEx resolution before Windows 7
     PSAPI_VERSION=1
-    ALPINE_FACTION
     "$<$<CONFIG:Debug>:DEBUG>"
 )
 
@@ -51,11 +52,6 @@ if(MSVC)
 else()
     add_compile_options(-msse2)
 endif()
-
-# FIXME
-# if(MSVC)
-#     set(CMAKE_GENERATOR_TOOLSET v141_xp)
-# endif()
 
 # Macros
 
@@ -83,14 +79,14 @@ macro(setup_debug_info target)
 endmacro()
 
 add_subdirectory(vendor)
-add_subdirectory(launcher_common)
+add_subdirectory(core)
+
+# Game modules. Each module's launcher static lib is linked into the launcher
+# exe via /WHOLEARCHIVE (see launcher/CMakeLists.txt) so its self-registration
+# static initializer fires at startup.
+#
+add_subdirectory(modules/alcatraz)
+add_subdirectory(modules/us_mostwanted)
+
 add_subdirectory(launcher)
-add_subdirectory(common)
-add_subdirectory(game_patch)
-add_subdirectory(editor_patch)
-add_subdirectory(patch_common)
-add_subdirectory(xlog)
-add_subdirectory(crash_handler)
-add_subdirectory(crash_handler_stub)
-add_subdirectory(resources)
-add_subdirectory(tools)
+

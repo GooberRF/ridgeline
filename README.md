@@ -1,165 +1,51 @@
-Alpine Faction
-============
-<img src="https://raw.githubusercontent.com/GooberRF/alpinefaction/refs/heads/master/docs/alpinelogo1.png">
+# Ridgeline
 
-Alpine Faction website: <a href="https://alpinefaction.com">alpinefaction.com</a>
+Ridgeline is a modular game patching framework by Goober. One launcher (`Ridgeline.exe`) plus one DLL per supported game; the launcher injects the appropriate DLL into the target game process to apply runtime patches.
 
-About
------
-Alpine Faction is a patch/modification for the 2001 FPS game Red Faction which resolves numerous bugs in the original game while also providing a plethora of new and improved features for singleplayer, multiplayer, and level/mod development. While Alpine Faction is not a source port, its goals and features are similar to what you might expect from one.
+Currently supported games:
 
-Alpine Faction is a fork of and uses Rafalh's incredible <a href="https://github.com/rafalh/dashfaction">Dash Faction</a> project as its foundation.
+| Game            | Module ID        | Notes                                           |
+| --------------- | ---------------- | ----------------------------------------------- |
+| Alcatraz        | `alcatraz`       | FPS uncap, custom resolution, windowed mode, texture-quality control, dev console |
+| US Most Wanted  | `us_mostwanted`  | Install-path resolver (no registry), CD bypass, windowed mode, quicksave/quickload hotkeys |
 
-Alpine Faction project goals:
-* Fix bugs and security vulnerabilities in the original game
-* Improve compatibility with modern hardware and operating systems
-* Modernize the Red Faction experience by adding features typically expected in modern games
-* Enhance engine performance and graphical quality
-* Restore valuable functionality that was cut from the original game
-* Empower players with extensive control over their gameplay experience
-* Offer server operators enhanced flexibility to customize their servers as desired
-* Equip level and mod designers with a robust set of tools so they can create awesome stuff
+Ridgeline is a fork of Alpine Faction (Goober's Red Faction patch) but does not, and will not, support Red Faction. Alpine Faction continues separately at https://github.com/gooberRF/alpinefaction.
 
-Alpine Faction requires:
-* Windows 7 or newer (or you can use Wine)
-* Any official distribution of Red Faction (Steam, GoG, retail, etc.)
-    * All official localizations are supported (English, French, German)
-    * Many other localizations are supported via mods
+## Using Ridgeline
 
-Key Features
------
-Most important:
-* Fixes for critical security vulnerabilities
-* Direct3D 11 renderer with GPU accelerated realtime per-pixel lighting and full mesh shadows
-* Brand new `King of the Hill`, `Damage Control`, `Revolt`, `Escalation`, and `Run` multiplayer game types
-* Advanced multiplayer bots system with headless bot clients, profile customization, and a fully integrated waypoint grid editor (with autogeneration for custom maps)
-* Multiplayer level auto-downloader (using API at https://autodl.factionfiles.com)
-* Fix for infamous submarine explosion bug (and other FPS-related issues)
-* Checkpoint autosaves at the start of each level
-* Fully integrated in-game achievements system
-* Optional account linking with `FactionFiles.com` to support achievement tracking and in-game level rating
-* Access to `Install with Alpine Faction` on `FactionFiles.com` to streamline custom level and mod installation
-* Enemies explode into gibs when killed by explosives
-* Player headlamp (flashlight)
-* Support for any resolution and aspect ratio
-* Fullscreen, windowed, borderless window modes
-* Enhanced mouse input with selectable sensitivity scaling
-* Ability to skip cutscenes
-* Restored water/lava rising functionality in Geothermal Plant
-* Enhanced graphics options such as anti-aliasing, full color range lighting, and colorblind mode
-* High resolution HUD and vector fonts
-* Speedometer HUD widget
-* Many performance and graphical improvements
+1. Run `Ridgeline.exe`.
+2. Pick a game from the list on the left.
+3. Set the `Game executable` path to your installed copy of that game and adjust per-game settings.
+4. Click **Launch**.
 
-Multiplayer:
-* Increased (and configurable) tick rate
-* TOML-based `ADS` dedicated server configuration with per-level rules, on-demand reloading, rule presets, and on-the-fly game type switching
-* "GunGame" game mode
-* Competitive match framework including "ready up" system and overtime
-* Improved gaussian distribution method for bullet spread
-* Damage feedback system including hit sounds, kill sounds, and visual damage number indicators
-* Radio messages and taunts
-* Visual indicators and nameplates in the world for objectives and teammates
-* Player outlines with per-team and enemy colors, plus optional team X-ray
-* Enemy and teammate footstep audio
-* Location pinging visible to teammates
-* Random critical hits (configurable)
-* First person and free camera spectate
-* Improved scoreboard with splittable categories for spectators, bots, browsers, and idle players
-* Voting system for kicking players, changing levels, and changing game types
-* Server-configurable gibbing, weapon loadouts, spawn delays, delayed item spawns, etc.
-* Cheating prevention
-* Many server fixes, performance improvements, and customizable features
-* `rf://` protocol handler for joining servers
+Settings are stored in `ridgeline.ini` next to `Ridgeline.exe`. Each game has its own `[module.<id>]` section; per-launcher settings live under `[ridgeline]`.
 
-Community development:
-* 60+ new event scripting objects for crafting advanced logic systems in maps, including events for gas regions, respawn points, capture points, mesh animation, fullscreen images, and gameplay rules
-* Support for gas regions
-* Support for dynamic lights in maps
-* Support for using dynamic lights, particle emitters, and push regions with movers
-* Enhanced and more immersive skyboxes, including support for movers, meshes, and mesh pixel lighting in skyboxes
-* Expanded destruction system with `Brush-based geomod` (RF2-style) and breakable detail brushes with dynamic debris generation
-* New `Mesh`, `Corona`, and `Note` object types
-* Removed legacy PS2 compatibility measures that resulted in decreased map performance
-* Access for many hardcoded settings to be customized in mods
-* Support for custom HUDs and translation packs as clientside mods
-* Ability to use custom meshes in multiplayer
-* Teleporters that can be used safely without negative side effects
-* Enhanced trigger options for multiplayer
-* Fixed support for events in multiplayer (removed requirement to use hacky workarounds)
-* Full color range lightmaps (removed lightmap clamping)
-* DDS texture support
-* 8-bit greyscale TGA support in both editor and game
-* OGG audio support
-* Support for custom BIK videos and bluebeard.bty in mods
-* Advanced debugging features for developing maps and mods
-* Many engine geometry and object limits raised or removed
-* Many level editor bug fixes, performance, and workflow improvements, including:
-  * `Mirror` tool for brushes and groups
-  * `Delete`, `Delete Ext.`, `Split`, and `Flip Normal` face-mode tools
-  * `Delete` and `Bridge` vertex-mode tools
-  * `To Mesh` tool for converting brushes directly to `.v3m` static meshes
-  * Custom texture subdirectories
-  * Improved packfile creation that includes used meshes, animations, and textures
+## Adding a new game module
 
-See the [CHANGELOG file](docs/CHANGELOG.md) for a detailed list of all features.
+Adding support for a new game is intentionally cheap. The recipe:
 
-Compatibility
--------------
-Alpine Faction is directly compatible only with Red Faction 1.20 North America (retail).
+1. Create `modules/<game>/` with two subdirectories:
+   - `launcher/` — a static lib that subclasses `ridgeline::IModule`, declares a settings schema, and self-registers via `RIDGELINE_REGISTER_MODULE(YourModule)`.
+   - `patch/` — a shared lib (`Ridgeline.<Game>.dll`) with an exported `Init()` function. Reads its `[module.<id>]` section from `ridgeline.ini`, applies hooks via `patch_runtime` (FunHook / CodeInjection / AsmWriter), returns 1.
+2. Add one line to root [CMakeLists.txt](CMakeLists.txt): `add_subdirectory(modules/<game>)`.
+3. Add one line to [launcher/CMakeLists.txt](launcher/CMakeLists.txt): `$<LINK_LIBRARY:WHOLE_ARCHIVE,Module_<Game>_Launcher>`.
 
-If you have another official distribution, Alpine Faction will attempt to apply the patches required:
-* For 1.00 or 1.10 NA, the installer will apply the 1.20 official patch.
-* For other retail localizations (French/German), the installer will patch your game executable as needed and maintain your localization.
-* For digital distributions (Steam, GoG, etc.), the installer will patch your game executable as needed.
+The launcher renders the settings UI from your schema automatically — no Win32 dialog code required for the common case. The schema supports Bool / Int / String / Path / Enum / DynamicEnum / KeyBinding control types. For settings the schema can't express, override `IModule::create_custom_settings_panel()` to return a custom child window.
 
-If you are somehow using an unsupported game executable, the installer and launcher will prompt you to obtain the correct one when you try to launch the game.
+[modules/alcatraz/](modules/alcatraz/) is the recommended reference. [modules/us_mostwanted/](modules/us_mostwanted/) shows the same pattern adapted for a dual-process game (the patch DLL injects itself into a second child process).
 
-In order to fully support current features and enable future expansion, Alpine Faction uses its own unique file for storing player settings (`alpine_settings.ini`)
+## Building
 
-When you first launch Alpine, if you have a legacy player settings file (`players.cfg`) from any other Red Faction client, Alpine Faction will import those settings for you automatically.
+See [docs/BUILDING.md](docs/BUILDING.md). MSVC on Windows or MinGW-w64 on Linux; targets x86 32-bit only (the games are 32-bit).
 
-Usage
------
-1. Install with the installer. Note that Alpine Faction does NOT have to be installed to your Red Faction folder.
+## Layout
 
-2. Run `AlpineFactionLauncher.exe`.
+- [core/](core/) — shared infrastructure used by the launcher and every module DLL: `common/` (config, error utils, HTTP), `xlog/` (logging), `patch_runtime/` (hooking primitives), `launcher_runtime/` (DLL injection, process launching, video device enum), `module_api/` (the `IModule` interface), `crash_handler/` + `crash_handler_stub/`.
+- [launcher/](launcher/) — `Ridgeline.exe` source.
+- [modules/](modules/) — one folder per supported game.
+- [vendor/](vendor/) — third-party deps (subhook, d3d8to9, win32xx, zlib, freetype, nlohmann/json, toml++, xxhash, sha1, ed25519, base64, minibsdiff).
+- [research/](research/) — old separate-distributable per-game source code (kept indefinitely as reference for the modules).
 
-3. Click the gear icon (next to "Play") to adjust options as desired.
+## License
 
-4. Click the "Play" button to start playing.
-
-Advanced usage
---------------
-Alpine Faction adds many new console commands, command line options, and dedicated server configuration settings. You can find full documentation on the RF Wiki:
-* https://www.redfactionwiki.com/wiki/Red_Faction_Console_Commands#Alpine_Faction
-* https://www.redfactionwiki.com/wiki/Red_Faction_Command_Line_Parameters#Alpine_Faction
-* https://www.redfactionwiki.com/wiki/Alpine_Faction_Dedicated_Server_Config
-
-NOTE: To use Red Faction or RED command line options with Alpine Faction, use them with `AlpineFactionLauncher.exe`. They will be forwarded to the launched process.
-
-Alpine Faction also adds many new features for level designers and mod developers. You can find full documentation on the RF Wiki:
-* https://www.redfactionwiki.com/wiki/Alpine_Faction_Level_Design
-* https://www.redfactionwiki.com/wiki/Alpine_Faction_Mod_Development
-
-Problems
---------
-If your antivirus software detects Alpine Faction as malicious, you may need to explicitly allow it to run.
-While Alpine Faction is safe to use, many antivirus vendors wrongfully flag new programs as malicious/suspicious.
-If you do not trust officially provided Alpine Faction distributions, you can review the code and compile it yourself.
-
-If you run into any problems or have questions, please ask in the Faction Files Discord server: https://discord.gg/factionfiles
-
-Building
---------
-
-See [docs/BUILDING.md](docs/BUILDING.md) for information about building Alpine Faction from source.
-
-License
--------
-Alpine Faction's source code is licensed under Mozilla Public License 2.0. See [LICENSE.txt](LICENSE.txt).
-
-Alpine Faction includes contributions from several authors. See [resources/licensing-info.txt](resources/licensing-info.txt) for more information
-
-Alpine Faction is a fork of Dash Faction, which is developed by rafalh. Licensing information for Dash Faction is available here:
-https://github.com/rafalh/dashfaction?tab=readme-ov-file#license
+Ridgeline's source code is licensed under Mozilla Public License 2.0. See [LICENSE.txt](LICENSE.txt). For third-party dependency licensing, see [licensing-info.txt](licensing-info.txt).
