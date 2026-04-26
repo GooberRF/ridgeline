@@ -1,5 +1,4 @@
 # Ridgeline
-============
 <img src="https://raw.githubusercontent.com/GooberRF/ridgeline/refs/heads/master/docs/ridgeline.png">
 
 Ridgeline is a modular game patching framework. One launcher (`Ridgeline.exe`) plus one DLL per supported game; the launcher injects the appropriate DLL into the target game process to apply runtime patches.
