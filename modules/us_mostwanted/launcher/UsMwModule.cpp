@@ -26,6 +26,15 @@ constexpr const char* kPatchDllName    = "Ridgeline.UsMostWanted.dll";
 
 constexpr std::array<const char*, 1> kDefaultExeNames{"MostWanted.exe"};
 
+// Things this module always does, regardless of settings. Shown in the
+// launcher pane below the schema settings.
+constexpr std::array<const char*, 4> kAlwaysOnPatches{
+    "Game runs without the original installer's registry entries (install path resolved from the running exe)",
+    "CD check bypassed (no game disc required)",
+    "Engine.exe is launched directly with the right working directory and command-line flags",
+    "Quick-save / Quick-load hotkey thread is enabled (the keys are configurable above)",
+};
+
 const ridgeline::SettingDef kSchema[] = {
     {
         .key = "WindowMode",
@@ -107,6 +116,11 @@ public:
     std::span<const ridgeline::SettingDef> settings_schema() const override
     {
         return std::span{kSchema};
+    }
+
+    std::span<const char* const> always_on_patches() const override
+    {
+        return {kAlwaysOnPatches.data(), kAlwaysOnPatches.size()};
     }
 
     void launch() override

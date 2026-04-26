@@ -4,6 +4,7 @@
 #include <ridgeline/Module.h>
 #include <memory>
 #include <string>
+#include <vector>
 #include <windows.h>
 
 namespace ridgeline_launcher {
@@ -66,7 +67,17 @@ private:
     HWND m_launch_button = nullptr;
     HWND m_help_button = nullptr;
     HWND m_exit_button = nullptr;
+    // Scrollable container that hosts the schema panel + the always-on bullet
+    // list. Created per-pane (right pane), destroyed in destroy_right_pane.
+    // The Game executable row + Launch button stay outside the scroll area
+    // (children of m_hwnd) so they're always visible.
+    HWND m_scroll_panel = nullptr;
     std::unique_ptr<SchemaSettingsPanel> m_schema_panel;
+
+    // Owned-by-MainWindow decorations rendered around the schema panel
+    // (e.g. the "Always applied" bullet list under a module's settings).
+    // Destroyed in destroy_right_pane.
+    std::vector<HWND> m_decorations;
 
     // Set when the active module supplied a custom panel via
     // IModule::create_custom_settings_panel(). The launcher must call

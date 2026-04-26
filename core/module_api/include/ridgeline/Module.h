@@ -90,6 +90,13 @@ public:
     // Return an empty span if you provide a custom panel instead.
     virtual std::span<const SettingDef> settings_schema() const = 0;
 
+    // Optional human-readable bullet list of patches this module ALWAYS
+    // applies regardless of any setting — bug fixes, install-path resolvers,
+    // CD-check bypass, that kind of thing. Shown below the settings panel as
+    // a "what this module does for you out of the box" section. Empty span
+    // means show nothing.
+    virtual std::span<const char* const> always_on_patches() const { return {}; }
+
     // Escape hatch. Return non-null to supply a fully custom dialog as a
     // child window of `parent`. Default returns nullptr (use schema).
     virtual HWND create_custom_settings_panel(HWND /*parent*/) { return nullptr; }

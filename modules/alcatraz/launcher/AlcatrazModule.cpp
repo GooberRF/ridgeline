@@ -26,6 +26,12 @@ constexpr const char* kPatchDllName    = "Ridgeline.Alcatraz.dll";
 
 constexpr std::array<const char*, 1> kDefaultExeNames{"Alcatraz.exe"};
 
+// Things this module always does, regardless of settings. Shown in the
+// launcher pane below the schema settings.
+constexpr std::array<const char*, 1> kAlwaysOnPatches{
+    "Widescreen aspect-ratio correction (projection-matrix fix for non-4:3 resolutions)",
+};
+
 // Settings schema. The keys MUST match those read by the patch DLL's
 // load_config() (modules/alcatraz/patch/main.cpp).
 constexpr std::array<const char*, 3> kWindowModeOptions{"Fullscreen", "Windowed", "Borderless"};
@@ -132,6 +138,11 @@ public:
     std::span<const ridgeline::SettingDef> settings_schema() const override
     {
         return std::span{kSchema};
+    }
+
+    std::span<const char* const> always_on_patches() const override
+    {
+        return {kAlwaysOnPatches.data(), kAlwaysOnPatches.size()};
     }
 
     void launch() override

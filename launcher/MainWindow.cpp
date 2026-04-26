@@ -41,6 +41,142 @@ void apply_ui_font(HWND hwnd)
     if (g_ui_font) SendMessageA(hwnd, WM_SETFONT, (WPARAM)g_ui_font, TRUE);
 }
 
+// ---------------------------------------------------------------------------
+// Scrollable container window class. Hosts a stack of child controls that
+// may exceed the visible height; WS_VSCROLL + SCROLLINFO + ScrollWindow give
+// us a smooth scrollable region. The launcher uses one of these per right-
+// pane build; the schema panel + always-on bullets are made children of it.
+
+constexpr const char* kScrollPanelClass = "RidgelineScrollPanel";
+
+// Per-window data we stash via SetWindowLongPtr(GWLP_USERDATA): the total
+// content height so on_size can recompute the scroll page correctly when the
+// container is resized.
+struct ScrollPanelData {
+    int content_height = 0;
+};
+
+void apply_scroll_geometry(HWND hwnd)
+{
+    auto* data = reinterpret_cast<ScrollPanelData*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    if (!data) return;
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    int visible = rc.bottom - rc.top;
+
+    SCROLLINFO si{sizeof(si)};
+    si.fMask = SIF_RANGE | SIF_PAGE | SIF_DISABLENOSCROLL;
+    si.nMin = 0;
+    si.nMax = (data->content_height > 0) ? data->content_height - 1 : 0;
+    si.nPage = visible;
+    SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+
+    // Clamp scroll position if the resize made the previous offset invalid.
+    si.fMask = SIF_POS;
+    GetScrollInfo(hwnd, SB_VERT, &si);
+    int max_scroll = std::max(0, data->content_height - visible);
+    if (si.nPos > max_scroll) {
+        int dy = si.nPos - max_scroll;
+        si.nPos = max_scroll;
+        SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+        ScrollWindow(hwnd, 0, dy, nullptr, nullptr);
+        UpdateWindow(hwnd);
+    }
+}
+
+LRESULT CALLBACK scroll_panel_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    switch (msg) {
+    case WM_NCCREATE: {
+        auto* data = new ScrollPanelData{};
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)data);
+        break;
+    }
+    case WM_NCDESTROY: {
+        auto* data = reinterpret_cast<ScrollPanelData*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+        delete data;
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
+        break;
+    }
+    case WM_SIZE:
+        apply_scroll_geometry(hwnd);
+        return 0;
+    case WM_VSCROLL: {
+        SCROLLINFO si{sizeof(si)};
+        si.fMask = SIF_ALL;
+        GetScrollInfo(hwnd, SB_VERT, &si);
+        int old_pos = si.nPos;
+        int new_pos = old_pos;
+        switch (LOWORD(wparam)) {
+        case SB_LINEUP:        new_pos -= 20; break;
+        case SB_LINEDOWN:      new_pos += 20; break;
+        case SB_PAGEUP:        new_pos -= si.nPage; break;
+        case SB_PAGEDOWN:      new_pos += si.nPage; break;
+        case SB_THUMBTRACK:
+        case SB_THUMBPOSITION: new_pos = si.nTrackPos; break;
+        case SB_TOP:           new_pos = si.nMin; break;
+        case SB_BOTTOM:        new_pos = si.nMax; break;
+        }
+        int max_scroll = std::max(0, (int)si.nMax - (int)si.nPage + 1);
+        new_pos = std::max(0, std::min(max_scroll, new_pos));
+        if (new_pos != old_pos) {
+            int dy = old_pos - new_pos;
+            si.fMask = SIF_POS;
+            si.nPos = new_pos;
+            SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+            ScrollWindow(hwnd, 0, dy, nullptr, nullptr);
+            UpdateWindow(hwnd);
+        }
+        return 0;
+    }
+    case WM_MOUSEWHEEL: {
+        // 3 lines per wheel notch (Windows default), driven via WM_VSCROLL
+        // so the same path handles thumb math + clamping.
+        int delta = GET_WHEEL_DELTA_WPARAM(wparam);
+        int notches = delta / WHEEL_DELTA;
+        int direction = (notches > 0) ? SB_LINEUP : SB_LINEDOWN;
+        int count = std::abs(notches) * 3;
+        for (int i = 0; i < count; ++i)
+            SendMessageA(hwnd, WM_VSCROLL, MAKEWPARAM(direction, 0), 0);
+        return 0;
+    }
+    case WM_ERASEBKGND: {
+        // Fill with COLOR_BTNFACE so the scroll area matches the surrounding
+        // dialog look and child controls' transparent backgrounds blend in.
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        FillRect((HDC)wparam, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+        return 1;
+    }
+    }
+    return DefWindowProc(hwnd, msg, wparam, lparam);
+}
+
+void register_scroll_panel_class(HINSTANCE hinst)
+{
+    static bool registered = false;
+    if (registered) return;
+    WNDCLASSEXA wc{};
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = &scroll_panel_wndproc;
+    wc.hInstance = hinst;
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+    wc.lpszClassName = kScrollPanelClass;
+    RegisterClassExA(&wc);
+    registered = true;
+}
+
+// Marks `panel` as containing `height` pixels of stacked content so its
+// scroll bar / page size can be derived from the visible client height.
+void set_scroll_panel_content_height(HWND panel, int height)
+{
+    auto* data = reinterpret_cast<ScrollPanelData*>(GetWindowLongPtr(panel, GWLP_USERDATA));
+    if (!data) return;
+    data->content_height = height;
+    apply_scroll_geometry(panel);
+}
+
 // Ridgeline-section settings schema (dogfooded through SchemaSettingsPanel).
 const std::array<const char*, 4> kLogLevelOptions{
     "trace", "debug", "info", "warn"
@@ -140,6 +276,8 @@ int MainWindow::run(HINSTANCE instance)
         g_title_font = CreateFontIndirectA(&title_lf);
     }
 
+    register_scroll_panel_class(instance);
+
     MainWindow self(instance);
 
     WNDCLASSEXA wc{};
@@ -237,6 +375,23 @@ LRESULT MainWindow::wnd_proc(UINT msg, WPARAM wparam, LPARAM lparam)
         break;
     }
 
+    case WM_MOUSEWHEEL: {
+        // WM_MOUSEWHEEL is delivered to the focused window. Forward to the
+        // scroll panel when the cursor is hovering anywhere over it (or its
+        // child controls), so the wheel works without clicking first.
+        if (m_scroll_panel) {
+            POINT pt{(SHORT)LOWORD(lparam), (SHORT)HIWORD(lparam)};
+            HWND under_cursor = WindowFromPoint(pt);
+            for (HWND w = under_cursor; w; w = GetParent(w)) {
+                if (w == m_scroll_panel) {
+                    return SendMessageA(m_scroll_panel, WM_MOUSEWHEEL, wparam, lparam);
+                }
+                if (w == m_hwnd) break;
+            }
+        }
+        break;
+    }
+
     case WM_CLOSE:
         save_current_pane();
         DestroyWindow(m_hwnd);
@@ -292,17 +447,28 @@ void MainWindow::on_size(int cx, int cy)
                  kListboxWidth, listbox_h,
                  SWP_NOZORDER);
 
-    // Right pane geometry (we reposition the persistent right-pane controls;
-    // SchemaSettingsPanel-owned controls are positioned at construction time,
-    // so they don't reflow until the pane is rebuilt).
+    // Right pane geometry (we reposition the persistent right-pane controls
+    // and the scroll panel; SchemaSettingsPanel-owned controls are placed at
+    // construction time relative to the scroll panel, so they scroll as a
+    // unit and don't need reflow on resize).
     int right_x = kPaddingOuter + kListboxWidth + kPaddingInner;
     int right_w = cx - right_x - kPaddingOuter;
     int bottom_button_y = cy - kPaddingOuter - kButtonHeight;
 
-    if (m_exe_label) {
-        SetWindowPos(m_exe_label, nullptr, right_x, kPaddingOuter, right_w, 18, SWP_NOZORDER);
+    int scroll_top = kPaddingOuter;            // Ridgeline pane starts at top
+    if (m_exe_edit) {
+        // Module pane: leave room for the Game executable row above the scroll.
+        scroll_top = kPaddingOuter + 22 + kRowHeight + 8;
+    }
+    int scroll_bottom = bottom_button_y - 8;
+    int scroll_h = std::max(0, scroll_bottom - scroll_top);
+
+    if (m_exe_label && !m_exe_edit) {
+        // Ridgeline pane has no exe row; the header label scrolls with the
+        // schema panel, so don't reposition it here.
     }
     if (m_exe_edit) {
+        SetWindowPos(m_exe_label, nullptr, right_x, kPaddingOuter, right_w, 18, SWP_NOZORDER);
         int browse_w = 80;
         int edit_w = right_w - browse_w - kPaddingInner;
         SetWindowPos(m_exe_edit, nullptr,
@@ -313,6 +479,10 @@ void MainWindow::on_size(int cx, int cy)
                          right_x + edit_w + kPaddingInner, kPaddingOuter + 22,
                          browse_w, kRowHeight - 2, SWP_NOZORDER);
         }
+    }
+    if (m_scroll_panel) {
+        SetWindowPos(m_scroll_panel, nullptr,
+                     right_x, scroll_top, right_w, scroll_h, SWP_NOZORDER);
     }
     if (m_launch_button) {
         SetWindowPos(m_launch_button, nullptr,
@@ -350,6 +520,12 @@ void MainWindow::destroy_right_pane()
     kill(m_launch_button);
     kill(m_help_button);
     kill(m_exit_button);
+    // The scroll panel owns the schema-panel + always-on bullets as its
+    // children; destroying it cascades to them. m_decorations entries that
+    // were children of m_scroll_panel get cleaned up that way too — but we
+    // also clear the vector so we don't leave dangling HWNDs.
+    kill(m_scroll_panel);
+    m_decorations.clear();
 }
 
 void MainWindow::on_selection_changed()
@@ -390,14 +566,27 @@ void MainWindow::build_right_pane_for_ridgeline()
     int right_x = kPaddingOuter + kListboxWidth + kPaddingInner;
     int right_w = 600;  // initial; on_size repositions
 
-    m_exe_label = CreateWindowExA(0, "STATIC", "Ridgeline application settings",
-        WS_CHILD | WS_VISIBLE,
-        right_x, kPaddingOuter, right_w, 22, m_hwnd, nullptr, m_instance, nullptr);
-    apply_ui_font(m_exe_label);
+    // Scroll panel covers the whole right area; the header label scrolls with
+    // the content. Help/Exit buttons stay outside, fixed at the bottom.
+    m_scroll_panel = CreateWindowExA(0, kScrollPanelClass, "",
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL,
+        right_x, kPaddingOuter, right_w, 200,
+        m_hwnd, nullptr, m_instance, nullptr);
+
+    int y = 0;
+    HWND header = CreateWindowExA(0, "STATIC", "Ridgeline application settings",
+        WS_CHILD | WS_VISIBLE | SS_LEFT,
+        0, y, right_w, 22, m_scroll_panel, nullptr, m_instance, nullptr);
+    apply_ui_font(header);
+    m_decorations.push_back(header);
+    y += 30;
 
     ridgeline::IniSection sec{m_ini_path, "ridgeline"};
     m_schema_panel = std::make_unique<SchemaSettingsPanel>(
-        m_hwnd, right_x, kPaddingOuter + 30, right_w, kRidgelineSchema, std::move(sec));
+        m_scroll_panel, 0, y, right_w, kRidgelineSchema, std::move(sec));
+    y += m_schema_panel->height_used();
+
+    set_scroll_panel_content_height(m_scroll_panel, y + 8);
 
     m_help_button = CreateWindowExA(0, "BUTTON", "Help",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -435,8 +624,20 @@ void MainWindow::build_right_pane_for_module(ridgeline::IModule* module)
     auto current_path = sec.get_string("GameExecutablePath", "");
     SetWindowTextA(m_exe_edit, current_path.c_str());
 
+    // Scroll panel for everything below the Game executable row and above the
+    // Launch button. on_size sets its real size; this initial geometry is a
+    // placeholder.
+    int scroll_top = kPaddingOuter + 22 + kRowHeight + 8;
+    m_scroll_panel = CreateWindowExA(0, kScrollPanelClass, "",
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL,
+        right_x, scroll_top, right_w, 200,
+        m_hwnd, nullptr, m_instance, nullptr);
+
     // Custom panel takes precedence; fall back to schema if the module
-    // declines (returns nullptr from create_custom_settings_panel).
+    // declines (returns nullptr from create_custom_settings_panel). Custom
+    // panels become children of m_hwnd (no scroll wrapping) since the module
+    // owns their layout entirely.
+    int content_y = 0;
     HWND custom = module->create_custom_settings_panel(m_hwnd);
     if (custom) {
         m_active_custom_panel_module = module;
@@ -445,9 +646,40 @@ void MainWindow::build_right_pane_for_module(ridgeline::IModule* module)
         auto schema = module->settings_schema();
         if (!schema.empty()) {
             m_schema_panel = std::make_unique<SchemaSettingsPanel>(
-                m_hwnd, right_x, kPaddingOuter + 22 + kRowHeight + 8, right_w, schema, std::move(sec));
+                m_scroll_panel, 0, content_y, right_w, schema, std::move(sec));
+            content_y += m_schema_panel->height_used();
         }
     }
+
+    // "Always applied" section — module's bug-fix bullets. Skipped if empty.
+    auto patches = module->always_on_patches();
+    if (!patches.empty()) {
+        int y = content_y + 14;
+        HWND header = CreateWindowExA(0, "STATIC", "Always applied (built-in fixes):",
+            WS_CHILD | WS_VISIBLE | SS_LEFT,
+            0, y, right_w, 18, m_scroll_panel, nullptr, m_instance, nullptr);
+        apply_ui_font(header);
+        m_decorations.push_back(header);
+        HWND rule = CreateWindowExA(0, "STATIC", "",
+            WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
+            0, y + 18, right_w, 1, m_scroll_panel, nullptr, m_instance, nullptr);
+        m_decorations.push_back(rule);
+        y += 22;
+        for (const char* line : patches) {
+            std::string text = "- ";
+            text += line;
+            HWND item = CreateWindowExA(0, "STATIC", text.c_str(),
+                WS_CHILD | WS_VISIBLE | SS_LEFT,
+                8, y, right_w - 8, 32,
+                m_scroll_panel, nullptr, m_instance, nullptr);
+            apply_ui_font(item);
+            m_decorations.push_back(item);
+            y += 32;
+        }
+        content_y = y;
+    }
+
+    set_scroll_panel_content_height(m_scroll_panel, content_y + 8);
 
     m_launch_button = CreateWindowExA(0, "BUTTON", "Launch",
         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
