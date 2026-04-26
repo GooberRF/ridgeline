@@ -56,4 +56,14 @@ std::string get_ridgeline_install_dir(HMODULE module);
 // Convenience: get_ridgeline_install_dir(module) + "ridgeline.ini".
 std::string get_ridgeline_ini_path(HMODULE module);
 
+// Reads [ridgeline] LogLevel from ridgeline.ini and applies it to this
+// module's xlog::LoggerConfig. Call once at startup, AFTER appenders are
+// added but BEFORE the first xlog::* call (Logger::root() is a per-module
+// singleton that captures the default level on first use).
+//
+// Each Ridgeline binary (launcher exe + each injected module DLL) has its
+// own xlog statics, so each one must call this independently. The setting
+// itself is launcher-wide; modules just inherit it.
+void apply_ridgeline_log_level(HMODULE module);
+
 } // namespace ridgeline

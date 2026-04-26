@@ -1,5 +1,7 @@
 #include <common/config/IniFile.h>
 #include <common/utils/os-utils.h>
+#include <xlog/Level.h>
+#include <xlog/LoggerConfig.h>
 #include <windows.h>
 
 namespace ridgeline {
@@ -61,6 +63,17 @@ std::string get_ridgeline_install_dir(HMODULE module)
 std::string get_ridgeline_ini_path(HMODULE module)
 {
     return get_ridgeline_install_dir(module) + "ridgeline.ini";
+}
+
+void apply_ridgeline_log_level(HMODULE module)
+{
+    IniSection sec{get_ridgeline_ini_path(module), "ridgeline"};
+    auto level_str = sec.get_string("LogLevel", "info");
+    xlog::Level level = xlog::Level::info;
+    if      (level_str == "trace") level = xlog::Level::trace;
+    else if (level_str == "debug") level = xlog::Level::debug;
+    else if (level_str == "warn")  level = xlog::Level::warn;
+    xlog::LoggerConfig::get().set_default_level(level);
 }
 
 } // namespace ridgeline

@@ -185,7 +185,7 @@ const ridgeline::SettingDef kRidgelineSchema[] = {
     {
         .key = "LogLevel",
         .label = "Log level",
-        .group = nullptr,
+        .group = "Logging",
         .type = ridgeline::SettingType::Enum,
         .default_value = std::string("info"),
         .int_range = std::nullopt,
@@ -193,19 +193,19 @@ const ridgeline::SettingDef kRidgelineSchema[] = {
         .dynamic_options = nullptr,
     },
     {
-        .key = "CheckForUpdates",
-        .label = "Check for updates on startup",
-        .group = nullptr,
+        .key = "ConfirmBeforeLaunch",
+        .label = "Confirm before launching a game",
+        .group = "Launching games",
         .type = ridgeline::SettingType::Bool,
-        .default_value = true,
+        .default_value = false,
         .int_range = std::nullopt,
         .enum_options = {},
         .dynamic_options = nullptr,
     },
     {
-        .key = "ConfirmBeforeLaunch",
-        .label = "Confirm before launching a game",
-        .group = nullptr,
+        .key = "KeepRidgelineOpen",
+        .label = "Keep Ridgeline open after launching a game",
+        .group = "Launching games",
         .type = ridgeline::SettingType::Bool,
         .default_value = false,
         .int_range = std::nullopt,
@@ -222,6 +222,67 @@ bool file_exists(const std::string& path)
     if (path.empty()) return false;
     DWORD attrs = GetFileAttributesA(path.c_str());
     return (attrs != INVALID_FILE_ATTRIBUTES) && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+// ASCII narrow→wide conversion (good enough for everything we put in the
+// Help dialog — all literals are ASCII).
+std::wstring widen(const std::string& s)
+{
+    std::wstring w(s.size(), L'\0');
+    for (size_t i = 0; i < s.size(); ++i)
+        w[i] = (wchar_t)(unsigned char)s[i];
+    return w;
+}
+
+// TaskDialog hyperlink handler. Hrefs are arbitrary strings we set in the
+// content; we route by exact match.
+HRESULT CALLBACK help_dlg_callback(HWND hwnd, UINT msg, WPARAM /*wp*/, LPARAM lp,
+                                   LONG_PTR /*ref*/)
+{
+    if (msg == TDN_HYPERLINK_CLICKED) {
+        const wchar_t* href = reinterpret_cast<const wchar_t*>(lp);
+        if (std::wcscmp(href, L"github") == 0) {
+            ShellExecuteW(hwnd, L"open",
+                          L"https://github.com/gooberRF/ridgeline",
+                          nullptr, nullptr, SW_SHOW);
+        } else if (std::wcscmp(href, L"licensing") == 0) {
+            wchar_t exe_path[MAX_PATH];
+            GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+            std::wstring path = exe_path;
+            auto sep = path.find_last_of(L"\\/");
+            if (sep != std::wstring::npos) path.resize(sep + 1);
+            path += L"licensing-info.txt";
+            ShellExecuteW(hwnd, L"open", path.c_str(),
+                          nullptr, nullptr, SW_SHOW);
+        }
+    }
+    return S_OK;
+}
+
+void show_help_dialog(HWND parent, HINSTANCE instance)
+{
+    std::wstring content =
+        L"Version " + widen(VERSION_STR) + L"\n"
+        L"Copyright (C) 2026 Chris \"Goober\" Parsons. "
+        L"Licensed under Mozilla Public License 2.0.\n\n"
+        L"Pick a game from the list on the left, set its game executable "
+        L"path, then click Launch. Settings are saved to ridgeline.ini next "
+        L"to Ridgeline.exe.\n\n"
+        L"<a href=\"github\">Ridgeline on GitHub</a>\n"
+        L"<a href=\"licensing\">Open-source component licensing</a>";
+
+    TASKDIALOGCONFIG cfg{};
+    cfg.cbSize             = sizeof(cfg);
+    cfg.hwndParent         = parent;
+    cfg.hInstance          = instance;
+    cfg.dwFlags            = TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
+    cfg.dwCommonButtons    = TDCBF_OK_BUTTON;
+    cfg.pszWindowTitle     = L"About Ridgeline";
+    cfg.pszMainIcon        = TD_INFORMATION_ICON;
+    cfg.pszMainInstruction = L"Ridgeline";
+    cfg.pszContent         = content.c_str();
+    cfg.pfCallback         = &help_dlg_callback;
+    TaskDialogIndirect(&cfg, nullptr, nullptr, nullptr);
 }
 
 // Recursively unwind a nested exception chain into a flat string. Each level
@@ -831,11 +892,32 @@ bool MainWindow::on_command(WPARAM wparam, LPARAM lparam)
         auto modules = ridgeline::ModuleRegistry::instance().all();
         if (m_selected_index > 0 && (size_t)(m_selected_index - 1) < modules.size()) {
             auto* mod = modules[m_selected_index - 1];
+
+            // Read launcher-wide preferences fresh each time (the user might
+            // have edited them on the Ridgeline pane in this same session).
+            ridgeline::IniSection ridgeline_sec{m_ini_path, "ridgeline"};
+            bool confirm = ridgeline_sec.get_bool("ConfirmBeforeLaunch", false);
+            bool keep_open = ridgeline_sec.get_bool("KeepRidgelineOpen", false);
+
+            if (confirm) {
+                std::string prompt = std::string("Launch ") + mod->display_name() + "?";
+                int rc = MessageBoxA(m_hwnd, prompt.c_str(), "Ridgeline",
+                                     MB_YESNO | MB_ICONQUESTION);
+                if (rc != IDYES) {
+                    xlog::info("Launch of '{}' cancelled by user", mod->internal_name());
+                    return true;
+                }
+            }
+
             xlog::info("Launch requested: module='{}' ({})",
                        mod->display_name(), mod->internal_name());
             try {
                 mod->launch();
                 xlog::info("Launch returned successfully");
+                if (!keep_open) {
+                    xlog::info("Closing launcher (KeepRidgelineOpen=false)");
+                    DestroyWindow(m_hwnd);
+                }
             } catch (const std::exception& e) {
                 std::string detail = format_nested_exception(e);
                 xlog::error("Launch FAILED for '{}':\n{}", mod->internal_name(), detail);
@@ -849,12 +931,7 @@ bool MainWindow::on_command(WPARAM wparam, LPARAM lparam)
     }
 
     if (id == ID_HELP && code == BN_CLICKED) {
-        MessageBoxA(m_hwnd,
-            "Ridgeline is a modular game patching framework.\n\n"
-            "Pick a game from the list on the left, configure its game "
-            "executable path, then click Launch.\n\n"
-            "See README.md and the project page for more.",
-            "Ridgeline Help", MB_OK | MB_ICONINFORMATION);
+        show_help_dialog(m_hwnd, m_instance);
         return true;
     }
 

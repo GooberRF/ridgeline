@@ -77,6 +77,7 @@ extern "C" __declspec(dllexport) DWORD WINAPI Init([[maybe_unused]] LPVOID param
         log_path = init_logging("unknown");
         app_name = "UsMostWanted";
     }
+    ridgeline::apply_ridgeline_log_level(g_module);
     install_crash_handler(g_module, app_name, log_path);
     xlog::info("Ridgeline.UsMostWanted.dll loaded");
 

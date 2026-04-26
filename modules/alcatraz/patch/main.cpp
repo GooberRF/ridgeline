@@ -94,6 +94,7 @@ void apply_patches()
 extern "C" __declspec(dllexport) DWORD WINAPI Init([[maybe_unused]] LPVOID param)
 {
     std::string log_path = init_logging();
+    ridgeline::apply_ridgeline_log_level(g_self_module);
     install_crash_handler(g_self_module, "Alcatraz", log_path);
     xlog::info("Ridgeline.Alcatraz.dll loaded");
 

@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <ridgeline/Module.h>
+#include <common/config/IniFile.h>
 #include <common/version/version.h>
 #include <crash_handler_stub.h>
 #include <xlog/xlog.h>
@@ -39,6 +40,7 @@ std::string init_logging()
     xlog::LoggerConfig::get().add_appender(std::make_unique<xlog::Win32Appender>());
     return log_path;
 }
+
 
 void log_module_inventory()
 {
@@ -101,6 +103,7 @@ int APIENTRY WinMain(HINSTANCE instance, HINSTANCE, LPSTR cmd_line, int)
     }
 
     std::string log_path = init_logging();
+    ridgeline::apply_ridgeline_log_level(nullptr);
     install_crash_handler(GetModuleHandleA(nullptr), "Ridgeline", log_path);
     xlog::info("==== {} starting ====", PRODUCT_NAME_VERSION);
     xlog::info("Build: {} {}", get_build_date(), get_build_time());
