@@ -37,12 +37,10 @@ the LICENSE.txt file located in the root directory of Alpine Faction.
 Alpine Faction Contributors who authored framework code that may survive in
 Ridgeline:
 
-natalie <webmistress@natalie.ee>:
-* code contributions
-
-is-this-c:
-* code contributions
-
+* natalie <webmistress@natalie.ee>
+* is-this-c
+* nick
+* AL2009man
 
 ###############################################################################
 ## Dash Faction (lineage attribution)
@@ -57,18 +55,10 @@ LICENSE.txt file located in the root directory of Dash Faction.
 Dash Faction Contributors who authored framework code that may survive in
 Ridgeline:
 
-Chris "Goober" Parsons:
-* code contributions
-
-natalie <webmistress@natalie.ee>:
-* code contributions
-
-is-this-c:
-* code contributions
-
-Mystyle:
-* setup code improvements
-
+* Chris "Goober" Parsons
+* natalie <webmistress@natalie.ee>
+* is-this-c
+* Mystyle
 
 ###############################################################################
 ## subhook
