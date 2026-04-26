@@ -15,60 +15,71 @@ int g_res_width = 0;
 int g_res_height = 0;
 int g_window_mode = 0;
 
-// Global hook on Sleep — intercepts ALL callers in the process.
+// FunHook<__stdcall(...)> needs a real __stdcall function pointer. MSVC will
+// silently convert non-capturing lambdas; MinGW/GCC won't. We forward-declare
+// the hook function so the FunHook initializer can take its address, then
+// define the body afterwards (so it can refer back to the FunHook for
+// call_target). Same shape as the existing patches in misc.cpp.
+
+// --- Sleep ---
+static void __stdcall sleep_hook_fn(DWORD ms);
 static FunHook<void __stdcall(DWORD)> sleep_hook{
-    reinterpret_cast<uintptr_t>(&Sleep),
-    [](DWORD ms) {
-        if (ms <= 1) {
-            SwitchToThread();
-            return;
-        }
-        sleep_hook.call_target(ms);
-    }
+    reinterpret_cast<uintptr_t>(&Sleep), &sleep_hook_fn
 };
+static void __stdcall sleep_hook_fn(DWORD ms)
+{
+    if (ms <= 1) {
+        SwitchToThread();
+        return;
+    }
+    sleep_hook.call_target(ms);
+}
 
-// Global hook on WaitForSingleObject — make short timeouts spin instead of
-// blocking on the system timer tick.
+// --- WaitForSingleObject: short-timeout spin instead of timer-tick block ---
+static DWORD __stdcall wait_single_hook_fn(HANDLE handle, DWORD timeout);
 static FunHook<DWORD __stdcall(HANDLE, DWORD)> wait_single_hook{
-    reinterpret_cast<uintptr_t>(&WaitForSingleObject),
-    [](HANDLE handle, DWORD timeout) -> DWORD {
-        if (timeout > 0 && timeout <= 2) {
-            LARGE_INTEGER start, now, freq;
-            QueryPerformanceFrequency(&freq);
-            QueryPerformanceCounter(&start);
-            LONGLONG deadline = start.QuadPart + (freq.QuadPart * timeout / 1000);
-            while (true) {
-                DWORD result = wait_single_hook.call_target(handle, 0);
-                if (result != WAIT_TIMEOUT) return result;
-                QueryPerformanceCounter(&now);
-                if (now.QuadPart >= deadline) return WAIT_TIMEOUT;
-                SwitchToThread();
-            }
-        }
-        return wait_single_hook.call_target(handle, timeout);
-    }
+    reinterpret_cast<uintptr_t>(&WaitForSingleObject), &wait_single_hook_fn
 };
+static DWORD __stdcall wait_single_hook_fn(HANDLE handle, DWORD timeout)
+{
+    if (timeout > 0 && timeout <= 2) {
+        LARGE_INTEGER start, now, freq;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&start);
+        LONGLONG deadline = start.QuadPart + (freq.QuadPart * timeout / 1000);
+        while (true) {
+            DWORD result = wait_single_hook.call_target(handle, 0);
+            if (result != WAIT_TIMEOUT) return result;
+            QueryPerformanceCounter(&now);
+            if (now.QuadPart >= deadline) return WAIT_TIMEOUT;
+            SwitchToThread();
+        }
+    }
+    return wait_single_hook.call_target(handle, timeout);
+}
 
-// Global hook on WaitForMultipleObjects
+// --- WaitForMultipleObjects ---
+static DWORD __stdcall wait_multi_hook_fn(DWORD count, const HANDLE* handles, BOOL wait_all, DWORD timeout);
 static FunHook<DWORD __stdcall(DWORD, const HANDLE*, BOOL, DWORD)> wait_multi_hook{
-    reinterpret_cast<uintptr_t>(&WaitForMultipleObjects),
-    [](DWORD count, const HANDLE* handles, BOOL wait_all, DWORD timeout) -> DWORD {
-        if (timeout > 0 && timeout <= 2) {
-            LARGE_INTEGER start, now, freq;
-            QueryPerformanceFrequency(&freq);
-            QueryPerformanceCounter(&start);
-            LONGLONG deadline = start.QuadPart + (freq.QuadPart * timeout / 1000);
-            while (true) {
-                DWORD result = wait_multi_hook.call_target(count, handles, wait_all, 0);
-                if (result != WAIT_TIMEOUT) return result;
-                QueryPerformanceCounter(&now);
-                if (now.QuadPart >= deadline) return WAIT_TIMEOUT;
-                SwitchToThread();
-            }
-        }
-        return wait_multi_hook.call_target(count, handles, wait_all, timeout);
-    }
+    reinterpret_cast<uintptr_t>(&WaitForMultipleObjects), &wait_multi_hook_fn
 };
+static DWORD __stdcall wait_multi_hook_fn(DWORD count, const HANDLE* handles, BOOL wait_all, DWORD timeout)
+{
+    if (timeout > 0 && timeout <= 2) {
+        LARGE_INTEGER start, now, freq;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&start);
+        LONGLONG deadline = start.QuadPart + (freq.QuadPart * timeout / 1000);
+        while (true) {
+            DWORD result = wait_multi_hook.call_target(count, handles, wait_all, 0);
+            if (result != WAIT_TIMEOUT) return result;
+            QueryPerformanceCounter(&now);
+            if (now.QuadPart >= deadline) return WAIT_TIMEOUT;
+            SwitchToThread();
+        }
+    }
+    return wait_multi_hook.call_target(count, handles, wait_all, timeout);
+}
 
 // Timer gate fix for FUN_004344e0.
 //
@@ -230,48 +241,54 @@ static CodeInjection post_d3d_init_injection{0x00427BE6, []() {
     xlog::info("Game resolution: {}x{}", gw, gh);
 }};
 
-// Hook CreateWindowExA for windowed/borderless window styles.
+// --- CreateWindowExA: force windowed / borderless styles ---
+static HWND __stdcall create_window_hook_fn(
+    DWORD ex_style, LPCSTR class_name, LPCSTR window_name, DWORD style,
+    int x, int y, int width, int height, HWND parent, HMENU menu, HINSTANCE instance, LPVOID param);
+
 static FunHook<HWND __stdcall(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID)>
 create_window_hook{
-    reinterpret_cast<uintptr_t>(&CreateWindowExA),
-    [](DWORD ex_style, LPCSTR class_name, LPCSTR window_name, DWORD style,
-       int x, int y, int width, int height, HWND parent, HMENU menu, HINSTANCE instance, LPVOID param) -> HWND
-    {
-        if (g_window_mode != 0 && parent == nullptr && (style & WS_VISIBLE)) {
-            int cw = g_res_width;
-            int ch = g_res_height;
-            if (cw <= 0 || ch <= 0) {
-                cw = addr_as_ref<int>(0x0058ED78);
-                ch = addr_as_ref<int>(0x0058ED74);
-            }
-            if (cw <= 0 || ch <= 0) {
-                cw = GetSystemMetrics(SM_CXSCREEN);
-                ch = GetSystemMetrics(SM_CYSCREEN);
-            }
-
-            if (g_window_mode == 1) {
-                style = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
-                RECT rc = {0, 0, cw, ch};
-                AdjustWindowRectEx(&rc, style, FALSE, ex_style);
-                width = rc.right - rc.left;
-                height = rc.bottom - rc.top;
-                x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
-                y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
-                xlog::info("Windowed: {}x{} client, window at {},{}", cw, ch, x, y);
-            } else {
-                style = WS_POPUP | WS_VISIBLE;
-                ex_style &= ~(WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_DLGMODALFRAME);
-                width = cw;
-                height = ch;
-                x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
-                y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
-                xlog::info("Borderless: {}x{} at {},{}", width, height, x, y);
-            }
-        }
-        return create_window_hook.call_target(ex_style, class_name, window_name, style,
-                                               x, y, width, height, parent, menu, instance, param);
-    }
+    reinterpret_cast<uintptr_t>(&CreateWindowExA), &create_window_hook_fn
 };
+
+static HWND __stdcall create_window_hook_fn(
+    DWORD ex_style, LPCSTR class_name, LPCSTR window_name, DWORD style,
+    int x, int y, int width, int height, HWND parent, HMENU menu, HINSTANCE instance, LPVOID param)
+{
+    if (g_window_mode != 0 && parent == nullptr && (style & WS_VISIBLE)) {
+        int cw = g_res_width;
+        int ch = g_res_height;
+        if (cw <= 0 || ch <= 0) {
+            cw = addr_as_ref<int>(0x0058ED78);
+            ch = addr_as_ref<int>(0x0058ED74);
+        }
+        if (cw <= 0 || ch <= 0) {
+            cw = GetSystemMetrics(SM_CXSCREEN);
+            ch = GetSystemMetrics(SM_CYSCREEN);
+        }
+
+        if (g_window_mode == 1) {
+            style = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+            RECT rc = {0, 0, cw, ch};
+            AdjustWindowRectEx(&rc, style, FALSE, ex_style);
+            width = rc.right - rc.left;
+            height = rc.bottom - rc.top;
+            x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
+            y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
+            xlog::info("Windowed: {}x{} client, window at {},{}", cw, ch, x, y);
+        } else {
+            style = WS_POPUP | WS_VISIBLE;
+            ex_style &= ~(WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_DLGMODALFRAME);
+            width = cw;
+            height = ch;
+            x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
+            y = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
+            xlog::info("Borderless: {}x{} at {},{}", width, height, x, y);
+        }
+    }
+    return create_window_hook.call_target(ex_style, class_name, window_name, style,
+                                           x, y, width, height, parent, menu, instance, param);
+}
 
 void rendering_apply_patches()
 {

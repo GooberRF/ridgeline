@@ -5,13 +5,30 @@ set(SRCS
     MainWindow.h
     SchemaSettingsPanel.cpp
     SchemaSettingsPanel.h
-    launcher.rc
     launcher.manifest
 )
+
+# Application manifest embedding is per-compiler. With MSVC, CMake/Ninja runs
+# its own mt.exe step that embeds a default manifest at resource ID 1; if the
+# .rc embeds OUR manifest at the same ID we get CVT1100 "duplicate resource".
+# Instead, on MSVC we feed launcher.manifest to the linker via /MANIFEST:EMBED
+# /MANIFESTINPUT, which merges with whatever mt.exe would emit. With MinGW
+# (windres, no mt.exe), the .rc-based embed is fine.
+if(NOT MSVC)
+    list(APPEND SRCS launcher.rc)
+endif()
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SRCS})
 
 add_executable(RidgelineLauncher WIN32 ${SRCS})
+
+if(MSVC)
+    target_link_options(RidgelineLauncher PRIVATE
+        "/MANIFEST:EMBED"
+        "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/launcher.manifest"
+        "/MANIFESTUAC:NO"
+    )
+endif()
 
 # Output binary is "Ridgeline.exe". The CMake target name keeps the Launcher
 # suffix to disambiguate from the project name in the build graph.
