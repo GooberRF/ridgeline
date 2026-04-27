@@ -31,3 +31,8 @@ Settings are stored in `ridgeline.ini` next to `Ridgeline.exe`. Each game has it
 ## License
 
 Ridgeline's source code is licensed under Mozilla Public License 2.0. See [LICENSE.txt](LICENSE.txt). For third-party dependency licensing, see [licensing-info.txt](licensing-info.txt).
+
+## Acknowledgments
+
+- The foundation on which Ridgeline relies is derived from [Dash Faction](https://github.com/rafalh/dashfaction) by [Rafalh (Rafał Harabień)](https://github.com/rafalh).
+- Ridgeline also contains code derived from [Alpine Faction](https://github.com/GooberRF/alpinefaction) by [Chris "Goober" Parsons](https://github.com/GooberRF), itself a fork of Dash Faction.

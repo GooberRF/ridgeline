@@ -245,6 +245,14 @@ HRESULT CALLBACK help_dlg_callback(HWND hwnd, UINT msg, WPARAM /*wp*/, LPARAM lp
             ShellExecuteW(hwnd, L"open",
                           L"https://github.com/gooberRF/ridgeline",
                           nullptr, nullptr, SW_SHOW);
+        } else if (std::wcscmp(href, L"alpine") == 0) {
+            ShellExecuteW(hwnd, L"open",
+                          L"https://github.com/gooberRF/alpinefaction",
+                          nullptr, nullptr, SW_SHOW);
+        } else if (std::wcscmp(href, L"dash") == 0) {
+            ShellExecuteW(hwnd, L"open",
+                          L"https://github.com/rafalh/dashfaction",
+                          nullptr, nullptr, SW_SHOW);
         } else if (std::wcscmp(href, L"licensing") == 0) {
             wchar_t exe_path[MAX_PATH];
             GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
@@ -263,11 +271,14 @@ void show_help_dialog(HWND parent, HINSTANCE instance)
 {
     std::wstring content =
         L"Version " + widen(VERSION_STR) + L"\n"
-        L"Copyright (C) 2026 Chris \"Goober\" Parsons. "
+        L"Copyright (C) 2026 Chris \"Goober\" Parsons.\n"
         L"Licensed under Mozilla Public License 2.0.\n\n"
-        L"Pick a game from the list on the left, set its game executable "
-        L"path, then click Launch. Settings are saved to ridgeline.ini next "
-        L"to Ridgeline.exe.\n\n"
+        L"• The foundation on which Ridgeline relies is derived from "
+        L"<a href=\"dash\">Dash Faction</a>, originally authored by "
+        L"Rafał Harabień (Rafalh).\n"
+        L"• Ridgeline also contains code derived from "
+        L"<a href=\"alpine\">Alpine Faction</a> by Chris \"Goober\" Parsons, "
+        L"itself a fork of Dash Faction.\n\n"
         L"<a href=\"github\">Ridgeline on GitHub</a>\n"
         L"<a href=\"licensing\">Open-source component licensing</a>";
 
@@ -282,6 +293,10 @@ void show_help_dialog(HWND parent, HINSTANCE instance)
     cfg.pszMainInstruction = L"Ridgeline";
     cfg.pszContent         = content.c_str();
     cfg.pfCallback         = &help_dlg_callback;
+    // Width in dialog template units (4 DLU ≈ 1 avg char). 350 ≈ ~87 chars,
+    // wide enough that the lineage paragraph + footer links don't break in
+    // awkward places. Without this the manager auto-sizes narrow.
+    cfg.cxWidth            = 350;
     TaskDialogIndirect(&cfg, nullptr, nullptr, nullptr);
 }
 
@@ -649,7 +664,7 @@ void MainWindow::build_right_pane_for_ridgeline()
 
     set_scroll_panel_content_height(m_scroll_panel, y + 8);
 
-    m_help_button = CreateWindowExA(0, "BUTTON", "Help",
+    m_help_button = CreateWindowExA(0, "BUTTON", "About",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         0, 0, 80, kButtonHeight,
         m_hwnd, (HMENU)(intptr_t)ID_HELP, m_instance, nullptr);

@@ -47,6 +47,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 if(MSVC)
     add_compile_options(/arch:SSE2)
+    # /utf-8 = source-charset:utf-8 + execution-charset:utf-8. Without it,
+    # MSVC reads source files as the system codepage (cp1252 on English
+    # Windows), so non-ASCII characters in string literals (e.g. •, ł, ń in
+    # the launcher's Help dialog) come out as multi-byte mojibake. MinGW/GCC
+    # already defaults to UTF-8 source so it doesn't need this.
+    add_compile_options(/utf-8)
     # Statically link Microsoft's CRT.
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
