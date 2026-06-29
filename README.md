@@ -6,7 +6,7 @@ Currently supported games:
 
 | Game            | Developer        | Publisher        | Module ID        |
 | --------------- | ---------------- | ---------------- | ---------------- |
-| Alcatraz (2009) | Silden | City Interactive | `alcatraz` |
+| Alcatraz (2010) | Silden | City Interactive | `alcatraz` |
 | US Most Wanted (2002) | Fun Labs | Activision Value | `us_mostwanted` |
 
 Ridgeline is a fork of Alpine Faction (https://github.com/gooberRF/alpinefaction).

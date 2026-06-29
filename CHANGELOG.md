@@ -1,7 +1,5 @@
 # Ridgeline changelog
 
-Loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is [SemVer](https://semver.org/spec/v2.0.0.html).
-
 Each release has one section per affected component — Ridgeline (core), and one per game module — with a flat bulleted list of changes. When releasing: rename the **Unreleased** heading to `## [x.y.z] - YYYY-MM-DD`, leave the empty Unreleased scaffolding for the next cycle, and bump `VERSION_*` macros in [core/common/include/common/version/version.h](core/common/include/common/version/version.h).
 
 ---
@@ -21,7 +19,7 @@ Each release has one section per affected component — Ridgeline (core), and on
 
 ## [0.1.0] - 2026-04-25
 
-Initial release. Ridgeline began as a fork of Alpine Faction (Goober's Red Faction patch) and was re-purposed as a modular framework for patching other games.
+Initial release. Ridgeline began as a fork of Alpine Faction and was re-purposed as a modular framework for patching other games.
 
 ### Ridgeline (core)
 - Multi-game launcher with a card-style game list and per-module settings panel.

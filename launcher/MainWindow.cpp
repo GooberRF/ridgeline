@@ -501,7 +501,7 @@ void MainWindow::on_create(HWND hwnd)
     ridgeline::IniSection ridgeline_section{m_ini_path, "ridgeline"};
     auto last = ridgeline_section.get_string("LastSelectedModule", "");
     int sel = 0;
-    if (!last.empty()) {
+    if (!last.empty() && last != "ridgeline") {
         for (size_t i = 0; i < modules.size(); ++i) {
             if (last == modules[i]->internal_name()) {
                 sel = (int)(i + 1);
@@ -618,15 +618,16 @@ void MainWindow::on_selection_changed()
     destroy_right_pane();
     m_selected_index = sel;
 
+    ridgeline::IniSection ridgeline_section{m_ini_path, "ridgeline"};
     if (sel == 0) {
         build_right_pane_for_ridgeline();
+        // Sentinel "ridgeline" so the next launch reopens this pane instead of
+        // falling back to whatever module was selected before.
+        ridgeline_section.set_string("LastSelectedModule", "ridgeline");
     } else {
         auto modules = ridgeline::ModuleRegistry::instance().all();
         if ((size_t)(sel - 1) < modules.size()) {
             build_right_pane_for_module(modules[sel - 1]);
-
-            // Persist this selection to ridgeline.ini.
-            ridgeline::IniSection ridgeline_section{m_ini_path, "ridgeline"};
             ridgeline_section.set_string("LastSelectedModule", modules[sel - 1]->internal_name());
         }
     }
